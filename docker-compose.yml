@@ -1,0 +1,112 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  user-service:
+    build: ./packages/user-service
+    container_name: user_service
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      FB_APP_ID: ${FB_APP_ID}
+      FB_APP_SECRET: ${FB_APP_SECRET}
+    networks:
+      - meta_network
+    ports:
+      - '7001:7001'
+
+  product-service:
+    build: ./packages/product-service
+    container_name: product_service
+    depends_on:
+      - postgres
+      - user-service
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
+      FB_APP_ID: ${FB_APP_ID}
+      FB_APP_SECRET: ${FB_APP_SECRET}
+    networks:
+      - meta_network
+    ports:
+      - '7002:7002'
+
+  order-service:
+    build: ./packages/order-service
+    container_name: order_service
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
+    networks:
+      - meta_network
+    ports:
+      - '7003:7003'
+
+  chatbot-service:
+    build: ./packages/chatbot-service
+    container_name: chatbot_service
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
+      FB_VERIFY_TOKEN: ${FB_VERIFY_TOKEN}
+      WITAI_SERVER_TOKEN: ${WITAI_SERVER_TOKEN}
+      # We'll dynamically store page tokens after user-service obtains them, or you can set PAGE_TOKEN for dev
+    networks:
+      - meta_network
+    ports:
+      - '9000:9000'
+
+  recommendation-service:
+    build: ./packages/recommendation-service
+    container_name: recommendation_service
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}
+    networks:
+      - meta_network
+    ports:
+      - '7004:7004'
+
+  gateway:
+    build: ./packages/gateway
+    container_name: gateway_svc
+    depends_on:
+      - user-service
+      - product-service
+      - order-service
+      - chatbot-service
+      - recommendation-service
+    networks:
+      - meta_network
+    ports:
+      - '8000:8000'
+
+  frontend:
+    build: ./packages/frontend
+    container_name: frontend_app
+    depends_on:
+      - gateway
+    networks:
+      - meta_network
+    ports:
+      - '3000:3000'
+
+networks:
+  meta_network:
+
+volumes:
+  pgdata:
